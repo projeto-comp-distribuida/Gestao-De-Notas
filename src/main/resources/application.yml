@@ -1,10 +1,10 @@
 spring:
   application:
-    name: microservice-template
+    name: grade-management-service
   
   # Configuração do DataSource (PostgreSQL)
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/distrischool_template}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/distrischool_grades}
     username: ${SPRING_DATASOURCE_USERNAME:distrischool}
     password: ${SPRING_DATASOURCE_PASSWORD:distrischool123}
     driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
@@ -88,8 +88,12 @@ spring:
         enabled: true
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT:8083}
   shutdown: graceful
+
+# Auth0 - configuração adicional
+auth0:
+  audience: ${AUTH0_AUDIENCE:https://distrischool.api}
 
 # Configurações do Actuator
 management:
@@ -145,9 +149,26 @@ logging:
 microservice:
   name: ${spring.application.name}
   version: 1.0.0
+  auth:
+    url: ${AUTH_SERVICE_URL:http://microservice-auth-dev:8080}
+  student:
+    url: ${STUDENT_SERVICE_URL:http://student-management-service-dev:8080}
+  teacher:
+    url: ${TEACHER_SERVICE_URL:http://microservice-template-dev:8080}
   kafka:
     topics:
-      # Defina seus tópicos aqui conforme os requisitos do DistriSchool
-      # Exemplos: student.created, teacher.assigned, schedule.updated, etc.
-      example-event: distrischool.example.event
-      example-command: distrischool.example.command
+      # Tópicos de eventos de notas
+      grade-created: distrischool.grade.created
+      grade-updated: distrischool.grade.updated
+      grade-deleted: distrischool.grade.deleted
+      # Tópicos de eventos de avaliações
+      evaluation-created: distrischool.evaluation.created
+      evaluation-updated: distrischool.evaluation.updated
+      # Tópicos de eventos de assessments
+      assessment-finalized: distrischool.assessment.finalized
+      # Tópicos de eventos de estudantes (para consumo)
+      student-created: distrischool.student.created
+      student-updated: distrischool.student.updated
+      student-deleted: distrischool.student.deleted
+      # Tópicos de eventos de professores (para consumo)
+      teacher-created: distrischool.teacher.created

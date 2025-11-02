@@ -1,171 +1,237 @@
-# DistriSchool Microservice Template
+# Grade Management Service - DistriSchool
 
-Template base para microsserviços do DistriSchool - Sistema de Gestão Escolar Distribuído.
+Microserviço de gestão de notas e avaliações para o sistema DistriSchool.
+
+## 📋 Visão Geral
+
+Este microserviço é responsável por:
+- Gerenciar notas de estudantes
+- Gerenciar avaliações/exames
+- Gerenciar avaliações consolidadas (assessments)
+- Validar integridade referencial com estudantes e professores
+- Publicar eventos via Kafka
+- Consumir eventos de outros microserviços
 
 ## 🏗️ Arquitetura
 
-Este template segue a arquitetura de microsserviços definida para o DistriSchool:
+### Entidades Principais
 
-- **Backend**: Spring Boot 3.2.0 com Spring Data JPA e Spring Kafka
-- **Banco de Dados**: PostgreSQL com Flyway para migrações
-- **Cache**: Redis para performance
-- **Mensageria**: Apache Kafka para comunicação assíncrona
-- **Comunicação**: Spring Cloud OpenFeign para comunicação entre serviços
-- **Resiliência**: Resilience4j Circuit Breaker
-- **Monitoramento**: Prometheus + Micrometer
+- **Grade**: Representa uma nota individual de um estudante em uma avaliação
+- **Evaluation**: Representa uma avaliação/exame atribuída a uma disciplina
+- **Assessment**: Representa a avaliação consolidada final de um estudante em uma disciplina
 
-## 🚀 Funcionalidades Base
+### Integrações
 
-### Estrutura do Template
+#### Integração Síncrona (Feign)
 
-```
-src/main/java/com/distrischool/template/
-├── controller/          # Controllers REST
-│   └── HealthController.java
-├── dto/                # Data Transfer Objects
-│   └── ApiResponse.java
-├── entity/             # Entidades JPA
-│   ├── BaseEntity.java
-│   └── SystemConfig.java
-├── kafka/              # Configuração Kafka
-│   ├── DistriSchoolEvent.java
-│   ├── EventProducer.java
-│   └── EventConsumer.java
-├── config/             # Configurações Spring
-├── exception/          # Tratamento de exceções
-├── repository/         # Repositórios JPA
-├── service/           # Lógica de negócio
-└── TemplateApplication.java
-```
+- **StudentServiceClient**: Comunicação com microserviço de estudantes
+  - Validação de existência de estudantes antes de criar notas
+  - URL configurável: `microservice.student.url`
 
-### Componentes Principais
+- **TeacherServiceClient**: Comunicação com microserviço de professores
+  - Validação de existência de professores antes de criar notas
+  - URL configurável: `microservice.teacher.url`
 
-#### 1. BaseEntity
-Entidade base com campos comuns:
-- Auditoria (created_at, updated_at, created_by, updated_by)
-- Soft delete (deleted_at, deleted_by)
-- Métodos utilitários para exclusão lógica
+#### Integração Assíncrona (Kafka)
 
-#### 2. ApiResponse
-DTO padronizado para respostas da API:
-- Formato consistente de resposta
-- Métodos estáticos para sucesso/erro
-- Timestamp automático
+**Tópicos Publicados**:
+- `distrischool.grade.created` - Quando uma nota é criada
+- `distrischool.grade.updated` - Quando uma nota é atualizada
+- `distrischool.grade.deleted` - Quando uma nota é deletada
 
-#### 3. DistriSchoolEvent
-Evento base para comunicação Kafka:
-- Estrutura padronizada para eventos
-- Metadados e dados flexíveis
-- Métodos utilitários para criação
+**Tópicos Consumidos**:
+- `distrischool.student.created` - Quando um estudante é criado
+- `distrischool.student.updated` - Quando um estudante é atualizado
+- `distrischool.student.deleted` - Quando um estudante é deletado
+- `distrischool.teacher.created` - Quando um professor é criado
 
-#### 4. HealthController
-Controller de exemplo com endpoints de saúde:
-- `/api/v1/health` - Status do serviço
-- `/api/v1/health/info` - Informações do serviço
+## 🚀 Como Executar
 
-## 📋 Requisitos do DistriSchool
+### Pré-requisitos
 
-Este template está preparado para implementar as funcionalidades do DistriSchool:
+- Java 17+
+- Maven 3.8+
+- Docker e Docker Compose
+- PostgreSQL 15+
+- Redis 7+
+- Apache Kafka
 
-### Microsserviços Planejados
-- **school-core-service**: Gestão de alunos/turmas
-- **notification-service**: Envio de mensagens
-- **user-service**: Autenticação e autorização
-- **teacher-service**: Gestão de professores
-- **schedule-service**: Gestão de horários
-- **attendance-service**: Registro de presenças
-- **grade-service**: Gestão de notas
-
-### Tópicos Kafka
-- `student.created` - Aluno criado
-- `teacher.assigned` - Professor atribuído
-- `schedule.updated` - Horário atualizado
-- `attendance.recorded` - Presença registrada
-- `user.logged` - Usuário logado
-
-## 🛠️ Como Usar
-
-### 1. Configuração do Ambiente
+### Desenvolvimento Local
 
 ```bash
-# Clone o template
+# 1. Clone o repositório (se necessário)
 git clone <repository-url>
-cd microservice-template
+cd Gestao-De-Notas
 
-# Configure as variáveis de ambiente
-export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/distrischool_template
-export SPRING_DATASOURCE_USERNAME=distrischool
-export SPRING_DATASOURCE_PASSWORD=distrischool123
-export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+# 2. Inicie os serviços de infraestrutura
+docker-compose up -d postgres redis zookeeper kafka
+
+# 3. Execute a aplicação
+mvn spring-boot:run
+
+# Ou usando Docker
+docker-compose up -d grade-management-service-dev
 ```
 
-### 2. Executar com Docker
+### Configuração
 
-```bash
-# Subir todos os serviços
-docker-compose up -d
+As configurações principais estão em `src/main/resources/application.yml`:
 
-# Verificar logs
-docker-compose logs -f
+```yaml
+spring:
+  application:
+    name: grade-management-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/distrischool_grades
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  kafka:
+    bootstrap-servers: localhost:9092
+
+microservice:
+  student:
+    url: http://student-management-service-dev:8080
+  teacher:
+    url: http://microservice-template-dev:8080
 ```
 
-### 3. Desenvolvimento
-
-```bash
-# Executar aplicação
-./mvnw spring-boot:run
-
-# Executar testes
-./mvnw test
-
-# Build
-./mvnw clean package
-```
-
-## 📡 Endpoints Disponíveis
+## 📡 Endpoints REST
 
 ### Health Check
-- `GET /api/v1/health` - Status do serviço
-- `GET /api/v1/health/info` - Informações do serviço
 
-### Actuator
-- `GET /actuator/health` - Health check detalhado
-- `GET /actuator/info` - Informações da aplicação
-- `GET /actuator/metrics` - Métricas Prometheus
+```
+GET /api/v1/health
+GET /api/v1/health/info
+```
 
-## 🔧 Configuração
+### Grades (Notas)
 
-### application.yml
-O arquivo de configuração está otimizado para:
-- PostgreSQL com pool de conexões
-- Redis para cache
-- Kafka para mensageria
-- Prometheus para métricas
-- Resilience4j para circuit breaker
+```
+POST   /api/v1/grades              - Criar nota
+GET    /api/v1/grades              - Listar notas (paginação)
+GET    /api/v1/grades/{id}         - Buscar nota por ID
+PUT    /api/v1/grades/{id}         - Atualizar nota
+DELETE /api/v1/grades/{id}        - Deletar nota
+GET    /api/v1/grades/student/{studentId} - Buscar notas de um estudante
+GET    /api/v1/grades/evaluation/{evaluationId} - Buscar notas de uma avaliação
+GET    /api/v1/grades/student/{studentId}/average - Calcular média de um estudante
+```
 
-### Variáveis de Ambiente
-- `SPRING_DATASOURCE_URL` - URL do PostgreSQL
-- `SPRING_DATASOURCE_USERNAME` - Usuário do banco
-- `SPRING_DATASOURCE_PASSWORD` - Senha do banco
-- `KAFKA_BOOTSTRAP_SERVERS` - Servidores Kafka
-- `SERVER_PORT` - Porta da aplicação
+### Exemplo de Requisição
 
-## 🚀 Próximos Passos
+```bash
+# Criar nota
+curl -X POST http://localhost:8083/api/v1/grades \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN_JWT>" \
+  -d '{
+    "studentId": 1,
+    "teacherId": 1,
+    "evaluationId": 1,
+    "gradeValue": 8.5,
+    "gradeDate": "2024-11-02",
+    "academicYear": 2024,
+    "academicSemester": 2
+  }'
+```
 
-1. **Criar Entidades**: Estender `BaseEntity` para suas entidades específicas
-2. **Implementar Controllers**: Criar endpoints REST seguindo o padrão do `HealthController`
-3. **Configurar Kafka**: Definir tópicos específicos no `application.yml`
-4. **Implementar Serviços**: Criar lógica de negócio nos services
-5. **Adicionar Testes**: Implementar testes unitários e de integração
+## 🔐 Segurança
+
+- Autenticação OAuth2 com Auth0
+- JWT tokens obrigatórios (exceto endpoints de health)
+- Validação de roles via SecurityContext
+
+Para desabilitar segurança em desenvolvimento:
+```yaml
+security:
+  disable: true
+```
+
+## 📊 Monitoramento
+
+### Actuator Endpoints
+
+```
+GET /actuator/health       - Health check detalhado
+GET /actuator/metrics     - Métricas da aplicação
+GET /actuator/prometheus  - Métricas Prometheus
+GET /actuator/info        - Informações da aplicação
+```
+
+### Logs
+
+Os logs estão configurados para incluir:
+- Requests HTTP
+- Validações de integração
+- Eventos Kafka
+- Erros e exceções
+
+## 🧪 Testes
+
+### Testes de Integração
+
+Execute o script de teste:
+
+```bash
+./test-integration.sh
+```
+
+Veja [INTEGRATION_TEST.md](./INTEGRATION_TEST.md) para detalhes completos.
+
+### Testes Unitários
+
+```bash
+mvn test
+```
+
+## 🔄 Fluxo de Integração
+
+### Criação de Nota
+
+1. Cliente faz POST `/api/v1/grades`
+2. GradeService valida dados da requisição
+3. GradeService valida existência do estudante (via Feign → Student Service)
+4. GradeService valida existência do professor (via Feign → Teacher Service)
+5. GradeService verifica se já existe nota para a avaliação
+6. GradeService salva a nota no banco
+7. GradeService publica evento Kafka `grade.created`
+8. EventConsumer do Student Service recebe evento (se configurado)
+9. Retorna resposta ao cliente
+
+### Consumo de Eventos
+
+1. Student Service publica evento `student.created`
+2. EventConsumer do Grade Service recebe evento
+3. EventConsumer processa evento (logs, sincronização, etc.)
+
+## 🛠️ Tecnologias
+
+- **Spring Boot 3.2.0**
+- **Spring Data JPA** - Persistência
+- **PostgreSQL** - Banco de dados
+- **Redis** - Cache
+- **Apache Kafka** - Mensageria
+- **Spring Cloud OpenFeign** - Comunicação entre serviços
+- **Resilience4j** - Circuit Breaker e Retry
+- **Flyway** - Migrações de banco
+- **Auth0** - Autenticação
+- **Prometheus** - Métricas
 
 ## 📚 Documentação Adicional
 
-- [Spring Boot Reference](https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/)
-- [Spring Kafka Documentation](https://docs.spring.io/spring-kafka/docs/current/reference/html/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Redis Documentation](https://redis.io/documentation)
-- [Kafka Documentation](https://kafka.apache.org/documentation/)
+- [INTEGRATION_TEST.md](./INTEGRATION_TEST.md) - Guia completo de testes de integração
+- [DEVELOPMENT.md](./DEVELOPMENT.md) - Guia de desenvolvimento
+- [TEMPLATE_USAGE.md](./TEMPLATE_USAGE.md) - Documentação do template
 
-## 🤝 Contribuição
+## 🤝 Contribuindo
 
-Este template é baseado nos requisitos do DistriSchool e deve ser mantido atualizado conforme a evolução do projeto.
+1. Siga os padrões de código estabelecidos
+2. Adicione testes para novas funcionalidades
+3. Atualize a documentação
+4. Siga os padrões de commit (Conventional Commits)
+
+## 📝 Licença
+
+Este projeto faz parte do DistriSchool e segue a licença do projeto principal.
