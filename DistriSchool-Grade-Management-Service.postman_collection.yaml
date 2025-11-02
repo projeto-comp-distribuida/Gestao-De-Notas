@@ -1,0 +1,580 @@
+info:
+  name: DistriSchool Grade Management Service
+  description: Coleção Postman para testar o microserviço de gestão de notas
+  schema: https://schema.getpostman.com/json/collection/v2.1.0/collection.json
+  version: 1.0.0
+
+variable:
+  - key: baseUrl
+    value: http://localhost:8083
+    type: string
+  - key: token
+    value: ""
+    type: string
+    description: JWT Token do Auth0 (obtenha via login)
+  - key: studentId
+    value: "1"
+    type: string
+    description: ID de um estudante existente
+  - key: teacherId
+    value: "1"
+    type: string
+    description: ID de um professor existente
+  - key: evaluationId
+    value: "1"
+    type: string
+    description: ID de uma avaliação existente
+  - key: gradeId
+    value: "1"
+    type: string
+    description: ID de uma nota criada
+
+item:
+  # Health Checks
+  - name: Health Checks
+    item:
+      - name: Health Check
+        request:
+          method: GET
+          header: []
+          url:
+            raw: '{{baseUrl}}/api/v1/health'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'health']
+          description: Verifica se o serviço está funcionando
+        response: []
+      
+      - name: Health Info
+        request:
+          method: GET
+          header: []
+          url:
+            raw: '{{baseUrl}}/api/v1/health/info'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'health', 'info']
+          description: Obtém informações detalhadas do serviço
+        response: []
+      
+      - name: Actuator Health
+        request:
+          method: GET
+          header: []
+          url:
+            raw: '{{baseUrl}}/actuator/health'
+            host: ['{{baseUrl}}']
+            path: ['actuator', 'health']
+          description: Health check detalhado do Spring Actuator
+        response: []
+      
+      - name: Actuator Metrics
+        request:
+          method: GET
+          header: []
+          url:
+            raw: '{{baseUrl}}/actuator/metrics'
+            host: ['{{baseUrl}}']
+            path: ['actuator', 'metrics']
+          description: Lista todas as métricas disponíveis
+        response: []
+      
+      - name: Actuator Prometheus
+        request:
+          method: GET
+          header: []
+          url:
+            raw: '{{baseUrl}}/actuator/prometheus'
+            host: ['{{baseUrl}}']
+            path: ['actuator', 'prometheus']
+          description: Métricas no formato Prometheus
+        response: []
+
+  # Grades (Notas)
+  - name: Grades (Notas)
+    item:
+      - name: Criar Nota
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 201", function () { pm.response.to.have.status(201); });
+                - pm.test("Response has success", function () { pm.expect(pm.response.json().success).to.eql(true); });
+                - pm.test("Response has data", function () { pm.expect(pm.response.json().data).to.exist; });
+                - |
+                  if (pm.response.json().data && pm.response.json().data.id) {
+                    pm.collectionVariables.set("gradeId", pm.response.json().data.id);
+                  }
+        request:
+          method: POST
+          header:
+            - key: Content-Type
+              value: application/json
+            - key: Authorization
+              value: 'Bearer {{token}}'
+            - key: X-User-Id
+              value: 'user-123'
+              description: ID do usuário (opcional se usar JWT)
+          body:
+            mode: raw
+            raw: |
+              {
+                "studentId": {{studentId}},
+                "teacherId": {{teacherId}},
+                "evaluationId": {{evaluationId}},
+                "gradeValue": 8.5,
+                "gradeDate": "2024-11-02",
+                "academicYear": 2024,
+                "academicSemester": 2,
+                "notes": "Excelente desempenho",
+                "status": "REGISTERED"
+              }
+          url:
+            raw: '{{baseUrl}}/api/v1/grades'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+          description: Cria uma nova nota. Valida automaticamente se o estudante e professor existem.
+        response: []
+      
+      - name: Buscar Nota por ID
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 200", function () { pm.response.to.have.status(200); });
+                - pm.test("Response has success", function () { pm.expect(pm.response.json().success).to.eql(true); });
+                - pm.test("Response has grade data", function () { pm.expect(pm.response.json().data).to.exist; });
+        request:
+          method: GET
+          header:
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          url:
+            raw: '{{baseUrl}}/api/v1/grades/{{gradeId}}'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades', '{{gradeId}}']
+          description: Busca uma nota específica por ID
+        response: []
+      
+      - name: Listar Todas as Notas
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 200", function () { pm.response.to.have.status(200); });
+                - pm.test("Response has success", function () { pm.expect(pm.response.json().success).to.eql(true); });
+                - pm.test("Response is paginated", function () { pm.expect(pm.response.json().data.content).to.exist; });
+        request:
+          method: GET
+          header:
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          url:
+            raw: '{{baseUrl}}/api/v1/grades?page=0&size=20&sortBy=id&direction=ASC'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+            query:
+              - key: page
+                value: '0'
+                description: Número da página (começa em 0)
+              - key: size
+                value: '20'
+                description: Tamanho da página
+              - key: sortBy
+                value: 'id'
+                description: Campo para ordenação
+              - key: direction
+                value: 'ASC'
+                description: Direção da ordenação (ASC ou DESC)
+          description: Lista todas as notas com paginação
+        response: []
+      
+      - name: Buscar Notas por Estudante
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 200", function () { pm.response.to.have.status(200); });
+                - pm.test("Response has success", function () { pm.expect(pm.response.json().success).to.eql(true); });
+        request:
+          method: GET
+          header:
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          url:
+            raw: '{{baseUrl}}/api/v1/grades/student/{{studentId}}?page=0&size=20'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades', 'student', '{{studentId}}']
+            query:
+              - key: page
+                value: '0'
+              - key: size
+                value: '20'
+          description: Lista todas as notas de um estudante específico
+        response: []
+      
+      - name: Buscar Notas por Avaliação
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 200", function () { pm.response.to.have.status(200); });
+                - pm.test("Response has success", function () { pm.expect(pm.response.json().success).to.eql(true); });
+        request:
+          method: GET
+          header:
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          url:
+            raw: '{{baseUrl}}/api/v1/grades/evaluation/{{evaluationId}}?page=0&size=20'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades', 'evaluation', '{{evaluationId}}']
+            query:
+              - key: page
+                value: '0'
+              - key: size
+                value: '20'
+          description: Lista todas as notas de uma avaliação específica
+        response: []
+      
+      - name: Calcular Média do Estudante
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 200", function () { pm.response.to.have.status(200); });
+                - pm.test("Response has success", function () { pm.expect(pm.response.json().success).to.eql(true); });
+                - pm.test("Response has average value", function () { pm.expect(pm.response.json().data).to.exist; });
+        request:
+          method: GET
+          header:
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          url:
+            raw: '{{baseUrl}}/api/v1/grades/student/{{studentId}}/average?academicYear=2024&academicSemester=2'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades', 'student', '{{studentId}}', 'average']
+            query:
+              - key: academicYear
+                value: '2024'
+                description: Ano letivo
+              - key: academicSemester
+                value: '2'
+                description: Semestre letivo (1 ou 2)
+          description: Calcula a média de um estudante em um período letivo
+        response: []
+      
+      - name: Atualizar Nota
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 200", function () { pm.response.to.have.status(200); });
+                - pm.test("Response has success", function () { pm.expect(pm.response.json().success).to.eql(true); });
+        request:
+          method: PUT
+          header:
+            - key: Content-Type
+              value: application/json
+            - key: Authorization
+              value: 'Bearer {{token}}'
+            - key: X-User-Id
+              value: 'user-123'
+          body:
+            mode: raw
+            raw: |
+              {
+                "studentId": {{studentId}},
+                "teacherId": {{teacherId}},
+                "evaluationId": {{evaluationId}},
+                "gradeValue": 9.0,
+                "gradeDate": "2024-11-02",
+                "academicYear": 2024,
+                "academicSemester": 2,
+                "notes": "Nota atualizada",
+                "status": "CONFIRMED"
+              }
+          url:
+            raw: '{{baseUrl}}/api/v1/grades/{{gradeId}}'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades', '{{gradeId}}']
+          description: Atualiza uma nota existente
+        response: []
+      
+      - name: Deletar Nota
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 200", function () { pm.response.to.have.status(200); });
+                - pm.test("Response has success", function () { pm.expect(pm.response.json().success).to.eql(true); });
+        request:
+          method: DELETE
+          header:
+            - key: Authorization
+              value: 'Bearer {{token}}'
+            - key: X-User-Id
+              value: 'user-123'
+          url:
+            raw: '{{baseUrl}}/api/v1/grades/{{gradeId}}'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades', '{{gradeId}}']
+          description: Deleta uma nota (soft delete - não remove do banco)
+        response: []
+
+  # Testes de Validação
+  - name: Testes de Validação
+    item:
+      - name: Criar Nota com Valor Inválido (> 10)
+        request:
+          method: POST
+          header:
+            - key: Content-Type
+              value: application/json
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          body:
+            mode: raw
+            raw: |
+              {
+                "studentId": {{studentId}},
+                "teacherId": {{teacherId}},
+                "evaluationId": {{evaluationId}},
+                "gradeValue": 15.0,
+                "gradeDate": "2024-11-02",
+                "academicYear": 2024,
+                "academicSemester": 2
+              }
+          url:
+            raw: '{{baseUrl}}/api/v1/grades'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+          description: Deve retornar 400 Bad Request - nota maior que 10
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 400", function () { pm.response.to.have.status(400); });
+      
+      - name: Criar Nota com Valor Inválido (< 0)
+        request:
+          method: POST
+          header:
+            - key: Content-Type
+              value: application/json
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          body:
+            mode: raw
+            raw: |
+              {
+                "studentId": {{studentId}},
+                "teacherId": {{teacherId}},
+                "evaluationId": {{evaluationId}},
+                "gradeValue": -5.0,
+                "gradeDate": "2024-11-02",
+                "academicYear": 2024,
+                "academicSemester": 2
+              }
+          url:
+            raw: '{{baseUrl}}/api/v1/grades'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+          description: Deve retornar 400 Bad Request - nota negativa
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 400", function () { pm.response.to.have.status(400); })
+      
+      - name: Criar Nota sem Campos Obrigatórios
+        request:
+          method: POST
+          header:
+            - key: Content-Type
+              value: application/json
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          body:
+            mode: raw
+            raw: |
+              {
+                "studentId": {{studentId}},
+                "gradeValue": 8.5
+              }
+          url:
+            raw: '{{baseUrl}}/api/v1/grades'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+          description: Deve retornar 400 Bad Request - campos obrigatórios faltando
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 400", function () { pm.response.to.have.status(400); })
+      
+      - name: Criar Nota com Estudante Inexistente
+        request:
+          method: POST
+          header:
+            - key: Content-Type
+              value: application/json
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          body:
+            mode: raw
+            raw: |
+              {
+                "studentId": 99999,
+                "teacherId": {{teacherId}},
+                "evaluationId": {{evaluationId}},
+                "gradeValue": 8.5,
+                "gradeDate": "2024-11-02",
+                "academicYear": 2024,
+                "academicSemester": 2
+              }
+          url:
+            raw: '{{baseUrl}}/api/v1/grades'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+          description: Deve retornar 400 Bad Request - estudante não encontrado (validação via Feign)
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 400", function () { pm.response.to.have.status(400); });
+                - pm.test("Error message mentions student", function () { pm.expect(pm.response.text()).to.include("Estudante"); });
+      
+      - name: Criar Nota com Professor Inexistente
+        request:
+          method: POST
+          header:
+            - key: Content-Type
+              value: application/json
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          body:
+            mode: raw
+            raw: |
+              {
+                "studentId": {{studentId}},
+                "teacherId": 99999,
+                "evaluationId": {{evaluationId}},
+                "gradeValue": 8.5,
+                "gradeDate": "2024-11-02",
+                "academicYear": 2024,
+                "academicSemester": 2
+              }
+          url:
+            raw: '{{baseUrl}}/api/v1/grades'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+          description: Deve retornar 400 Bad Request - professor não encontrado (validação via Feign)
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 400", function () { pm.response.to.have.status(400); });
+                - pm.test("Error message mentions teacher", function () { pm.expect(pm.response.text()).to.include("Professor"); })
+      
+      - name: Criar Nota Duplicada
+        request:
+          method: POST
+          header:
+            - key: Content-Type
+              value: application/json
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          body:
+            mode: raw
+            raw: |
+              {
+                "studentId": {{studentId}},
+                "teacherId": {{teacherId}},
+                "evaluationId": {{evaluationId}},
+                "gradeValue": 8.5,
+                "gradeDate": "2024-11-02",
+                "academicYear": 2024,
+                "academicSemester": 2
+              }
+          url:
+            raw: '{{baseUrl}}/api/v1/grades'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+          description: Deve retornar 400 Bad Request - já existe nota para este aluno nesta avaliação
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 400", function () { pm.response.to.have.status(400); });
+                - pm.test("Error message mentions duplicate", function () { pm.expect(pm.response.text()).to.include("existe"); })
+      
+      - name: Buscar Nota Inexistente
+        request:
+          method: GET
+          header:
+            - key: Authorization
+              value: 'Bearer {{token}}'
+          url:
+            raw: '{{baseUrl}}/api/v1/grades/99999'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades', '99999']
+          description: Deve retornar 404 Not Found
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 404", function () { pm.response.to.have.status(404); })
+
+  # Testes de Autenticação
+  - name: Testes de Autenticação
+    item:
+      - name: Listar Notas sem Token
+        request:
+          method: GET
+          header: []
+          url:
+            raw: '{{baseUrl}}/api/v1/grades'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+          description: Deve retornar 401 Unauthorized - token obrigatório
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 401", function () { pm.response.to.have.status(401); })
+      
+      - name: Criar Nota sem Token
+        request:
+          method: POST
+          header:
+            - key: Content-Type
+              value: application/json
+          body:
+            mode: raw
+            raw: |
+              {
+                "studentId": {{studentId}},
+                "teacherId": {{teacherId}},
+                "evaluationId": {{evaluationId}},
+                "gradeValue": 8.5,
+                "gradeDate": "2024-11-02",
+                "academicYear": 2024,
+                "academicSemester": 2
+              }
+          url:
+            raw: '{{baseUrl}}/api/v1/grades'
+            host: ['{{baseUrl}}']
+            path: ['api', 'v1', 'grades']
+          description: Deve retornar 401 Unauthorized - token obrigatório
+        event:
+          - listen: test
+            script:
+              exec:
+                - pm.test("Status code is 401", function () { pm.response.to.have.status(401); })
+
+auth:
+  type: bearer
+  bearer:
+    - key: token
+      value: '{{token}}'
+      type: string
+

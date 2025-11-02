@@ -16,21 +16,21 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: postgres
+    container_name: postgres-grades
     environment:
-      POSTGRES_DB: distrischool_template
+      POSTGRES_DB: distrischool_grades
       POSTGRES_USER: distrischool
       POSTGRES_PASSWORD: distrischool123
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5432:5432"
+      - "5436:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
     networks:
       - distrischool-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U distrischool -d distrischool_template"]
+      test: ["CMD-SHELL", "pg_isready -U distrischool -d distrischool_grades"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -104,13 +104,13 @@ services:
     networks:
       - distrischool-network
 
-  # Microserviço Template - Ambiente de Desenvolvimento com Hot Reloading
-  microservice-template-dev:
+  # Microserviço de Gestão de Notas - Ambiente de Desenvolvimento com Hot Reloading
+  grade-management-service-dev:
     build:
       context: .
       dockerfile: Dockerfile
       target: dev
-    container_name: microservice-template-dev
+    container_name: grade-management-service-dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -119,19 +119,22 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "8080:8080"
-      - "5005:5005"   # Porta para debug remoto
-      - "35729:35729" # Porta para LiveReload
+      - "8083:8080"
+      - "5007:5005"   # Porta para debug remoto
+      - "35731:35729" # Porta para LiveReload
     environment:
       SERVER_PORT: 8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_PROFILES_ACTIVE: dev
+      SECURITY_DISABLE: "false"
+      AUTH0_DOMAIN: dev-lthr3fyfn4x47q1g.us.auth0.com
+      AUTH0_AUDIENCE: https://api.distrischool.com
       SPRING_DEVTOOLS_RESTART_ENABLED: "true"
       SPRING_DEVTOOLS_LIVERELOAD_ENABLED: "true"
       SPRING_DEVTOOLS_RESTART_POLL_INTERVAL: "1000"
       SPRING_DEVTOOLS_RESTART_QUIET_PERIOD: "400"
       # Configurações do PostgreSQL
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/distrischool_template
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/distrischool_grades
       SPRING_DATASOURCE_USERNAME: distrischool
       SPRING_DATASOURCE_PASSWORD: distrischool123
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
