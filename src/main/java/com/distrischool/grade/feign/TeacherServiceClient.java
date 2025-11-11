@@ -12,7 +12,7 @@ import java.util.Map;
  */
 @FeignClient(
     name = "teacher-service",
-    url = "${microservice.teacher.url:http://microservice-template-dev:8080}"
+    url = "${microservice.teacher.url:http://teacher-management-service-dev:8080}"
 )
 public interface TeacherServiceClient {
 

@@ -14,11 +14,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Controller REST para gerenciamento de notas
@@ -34,9 +36,11 @@ public class GradeController {
     /**
      * Cria uma nova nota
      * POST /api/v1/grades
+     * Requer role TEACHER ou ADMIN
      */
     @PostMapping
     @Timed(value = "grades.create", description = "Time taken to create a grade")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
     public ResponseEntity<ApiResponse<GradeResponseDTO>> createGrade(
         @Valid @RequestBody GradeRequestDTO request,
         @RequestHeader(value = "X-User-Id", required = false) String userId,
@@ -44,8 +48,15 @@ public class GradeController {
 
         String effectiveUserId = userId != null ? userId : (jwt != null ? jwt.getSubject() : "system");
         
-        log.info("Requisição para criar nota - Aluno: {}, Avaliação: {} (by {})", 
-                 request.getStudentId(), request.getEvaluationId(), effectiveUserId);
+        // Extrair roles do JWT
+        List<String> roles = jwt != null ? jwt.getClaimAsStringList("permissions") : List.of();
+        if (roles == null) {
+            roles = List.of();
+        }
+        String userRole = extractUserRole(roles, jwt);
+        
+        log.info("Requisição para criar nota - Aluno: {}, Avaliação: {} (by {}, role: {})", 
+                 request.getStudentId(), request.getEvaluationId(), effectiveUserId, userRole);
         
         GradeResponseDTO grade = gradeService.createGrade(request, effectiveUserId);
 
@@ -139,9 +150,11 @@ public class GradeController {
     /**
      * Atualiza uma nota
      * PUT /api/v1/grades/{id}
+     * Requer role TEACHER ou ADMIN
      */
     @PutMapping("/{id}")
     @Timed(value = "grades.update", description = "Time taken to update a grade")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
     public ResponseEntity<ApiResponse<GradeResponseDTO>> updateGrade(
         @PathVariable Long id,
         @Valid @RequestBody GradeRequestDTO request,
@@ -159,9 +172,11 @@ public class GradeController {
     /**
      * Deleta uma nota (soft delete)
      * DELETE /api/v1/grades/{id}
+     * Requer role TEACHER ou ADMIN
      */
     @DeleteMapping("/{id}")
     @Timed(value = "grades.delete", description = "Time taken to delete a grade")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteGrade(
         @PathVariable Long id,
         @RequestHeader(value = "X-User-Id", required = false) String userId,
@@ -173,6 +188,31 @@ public class GradeController {
         gradeService.deleteGrade(id, effectiveUserId);
 
         return ResponseEntity.ok(ApiResponse.success(null, "Nota deletada com sucesso"));
+    }
+
+    /**
+     * Extrai a role do usuário do JWT
+     */
+    private String extractUserRole(List<String> permissions, Jwt jwt) {
+        if (permissions != null && !permissions.isEmpty()) {
+            // Procurar por roles nas permissions
+            for (String permission : permissions) {
+                if (permission.contains("TEACHER") || permission.contains("ADMIN")) {
+                    return permission.contains("ADMIN") ? "ADMIN" : "TEACHER";
+                }
+            }
+        }
+        
+        // Tentar extrair do claim "roles" do JWT
+        if (jwt != null) {
+            List<String> roles = jwt.getClaimAsStringList("roles");
+            if (roles != null && !roles.isEmpty()) {
+                if (roles.contains("ADMIN")) return "ADMIN";
+                if (roles.contains("TEACHER")) return "TEACHER";
+            }
+        }
+        
+        return "USER"; // Role padrão
     }
 }
 

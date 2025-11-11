@@ -1,6 +1,5 @@
 package com.distrischool.grade.kafka;
 
-import com.distrischool.grade.kafka.DistriSchoolEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -99,9 +98,54 @@ public class EventConsumer {
             if (data != null) {
                 Object teacherId = data.get("teacherId");
                 log.info("Professor criado - ID: {}", teacherId);
+                // Aqui podemos adicionar lógica para inicializar estruturas relacionadas
             }
         } catch (Exception e) {
             log.error("Erro ao processar evento teacher.created: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Escuta eventos de professores atualizados
+     */
+    @KafkaListener(
+        topics = "${microservice.kafka.topics.teacher-updated:distrischool.teacher.updated}",
+        groupId = "${spring.application.name}-group"
+    )
+    public void consumeTeacherUpdatedEvent(DistriSchoolEvent event) {
+        log.info("Evento recebido - Teacher Updated: {}", event.getEventId());
+        
+        try {
+            Map<String, Object> data = event.getData();
+            if (data != null) {
+                Object teacherId = data.get("teacherId");
+                log.info("Professor atualizado - ID: {}", teacherId);
+                // Aqui podemos adicionar lógica para sincronizar dados se necessário
+            }
+        } catch (Exception e) {
+            log.error("Erro ao processar evento teacher.updated: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Escuta eventos de professores deletados
+     */
+    @KafkaListener(
+        topics = "${microservice.kafka.topics.teacher-deleted:distrischool.teacher.deleted}",
+        groupId = "${spring.application.name}-group"
+    )
+    public void consumeTeacherDeletedEvent(DistriSchoolEvent event) {
+        log.info("Evento recebido - Teacher Deleted: {}", event.getEventId());
+        
+        try {
+            Map<String, Object> data = event.getData();
+            if (data != null) {
+                Object teacherId = data.get("teacherId");
+                log.info("Professor deletado - ID: {}", teacherId);
+                // Aqui podemos adicionar lógica para limpar dados relacionados se necessário
+            }
+        } catch (Exception e) {
+            log.error("Erro ao processar evento teacher.deleted: {}", e.getMessage(), e);
         }
     }
 }

@@ -150,11 +150,11 @@ microservice:
   name: ${spring.application.name}
   version: 1.0.0
   auth:
-    url: ${AUTH_SERVICE_URL:http://microservice-auth-dev:8080}
+    url: ${AUTH_SERVICE_URL:http://auth-service-dev:8080}
   student:
     url: ${STUDENT_SERVICE_URL:http://student-management-service-dev:8080}
   teacher:
-    url: ${TEACHER_SERVICE_URL:http://microservice-template-dev:8080}
+    url: ${TEACHER_SERVICE_URL:http://teacher-management-service-dev:8080}
   kafka:
     topics:
       # Tópicos de eventos de notas
@@ -172,3 +172,5 @@ microservice:
       student-deleted: distrischool.student.deleted
       # Tópicos de eventos de professores (para consumo)
       teacher-created: distrischool.teacher.created
+      teacher-updated: distrischool.teacher.updated
+      teacher-deleted: distrischool.teacher.deleted

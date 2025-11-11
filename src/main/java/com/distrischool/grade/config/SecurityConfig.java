@@ -108,14 +108,40 @@ public class SecurityConfig {
 
         Converter<Jwt, Collection<GrantedAuthority>> aggregateConverter = jwt -> {
             Collection<GrantedAuthority> authorities = new ArrayList<>(scopesConverter.convert(jwt));
+            
+            // Extrair roles do claim "roles" ou "permissions"
+            Object rolesClaim = jwt.getClaims().get("roles");
+            if (rolesClaim instanceof Collection<?> roles) {
+                for (Object role : roles) {
+                    if (role != null) {
+                        String roleStr = role.toString().toUpperCase();
+                        // Adiciona como ROLE_ para compatibilidade com Spring Security
+                        if (roleStr.startsWith("ROLE_")) {
+                            authorities.add(new SimpleGrantedAuthority(roleStr));
+                        } else {
+                            authorities.add(new SimpleGrantedAuthority("ROLE_" + roleStr));
+                        }
+                    }
+                }
+            }
+            
+            // Também extrair de permissions se disponível
             Object permissionsClaim = jwt.getClaims().get("permissions");
             if (permissionsClaim instanceof Collection<?> perms) {
                 for (Object p : perms) {
                     if (p != null) {
-                        authorities.add(new SimpleGrantedAuthority("SCOPE_" + p.toString()));
+                        String perm = p.toString();
+                        // Se for uma role (ADMIN, TEACHER, etc), adiciona como ROLE_
+                        if (perm.equalsIgnoreCase("ADMIN") || perm.equalsIgnoreCase("TEACHER") 
+                            || perm.equalsIgnoreCase("STUDENT") || perm.equalsIgnoreCase("PARENT")) {
+                            authorities.add(new SimpleGrantedAuthority("ROLE_" + perm.toUpperCase()));
+                        } else {
+                            authorities.add(new SimpleGrantedAuthority("SCOPE_" + perm));
+                        }
                     }
                 }
             }
+            
             return authorities;
         };
 

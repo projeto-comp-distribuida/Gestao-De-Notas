@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Service para gerenciamento de notas
@@ -56,7 +57,8 @@ public class GradeService {
     @Transactional
     @CacheEvict(value = "grades", allEntries = true)
     public GradeResponseDTO createGrade(GradeRequestDTO request, String createdBy) {
-        log.info("Criando nova nota - Aluno: {}, Avaliação: {}", request.getStudentId(), request.getEvaluationId());
+        log.info("Criando nova nota - Aluno: {}, Avaliação: {} (by {})", 
+                 request.getStudentId(), request.getEvaluationId(), createdBy);
 
         // Validações de negócio
         validateGradeRequest(request);
@@ -66,6 +68,9 @@ public class GradeService {
 
         // Valida se o professor existe (integração com Teacher Service)
         validateTeacherExists(request.getTeacherId());
+        
+        // Validação de autorização (opcional - pode ser feito no controller também)
+        // validateUserPermission(createdBy);
 
         // Verifica se já existe nota para este aluno nesta avaliação
         gradeRepository.findByStudentIdAndEvaluationId(request.getStudentId(), request.getEvaluationId())
@@ -98,7 +103,9 @@ public class GradeService {
         // Publica evento Kafka
         publishGradeCreatedEvent(savedGrade);
 
-        return GradeResponseDTO.fromEntity(savedGrade);
+        GradeResponseDTO dto = GradeResponseDTO.fromEntity(savedGrade);
+        enrichWithStudentAndTeacherData(dto, savedGrade);
+        return dto;
     }
 
     /**
@@ -108,7 +115,9 @@ public class GradeService {
     public GradeResponseDTO getGradeById(Long id) {
         log.debug("Buscando nota por ID: {}", id);
         Grade grade = findGradeByIdOrThrow(id);
-        return GradeResponseDTO.fromEntity(grade);
+        GradeResponseDTO dto = GradeResponseDTO.fromEntity(grade);
+        enrichWithStudentAndTeacherData(dto, grade);
+        return dto;
     }
 
     /**
@@ -117,7 +126,11 @@ public class GradeService {
     public Page<GradeResponseDTO> getAllGrades(Pageable pageable) {
         log.debug("Listando todas as notas - Página: {}", pageable.getPageNumber());
         return gradeRepository.findAllNotDeleted(pageable)
-                .map(GradeResponseDTO::fromEntity);
+                .map(grade -> {
+                    GradeResponseDTO dto = GradeResponseDTO.fromEntity(grade);
+                    enrichWithStudentAndTeacherData(dto, grade);
+                    return dto;
+                });
     }
 
     /**
@@ -126,7 +139,11 @@ public class GradeService {
     public Page<GradeResponseDTO> getGradesByStudent(Long studentId, Pageable pageable) {
         log.debug("Buscando notas do aluno: {}", studentId);
         return gradeRepository.findByStudentId(studentId, pageable)
-                .map(GradeResponseDTO::fromEntity);
+                .map(grade -> {
+                    GradeResponseDTO dto = GradeResponseDTO.fromEntity(grade);
+                    enrichWithStudentAndTeacherData(dto, grade);
+                    return dto;
+                });
     }
 
     /**
@@ -135,7 +152,11 @@ public class GradeService {
     public Page<GradeResponseDTO> getGradesByEvaluation(Long evaluationId, Pageable pageable) {
         log.debug("Buscando notas da avaliação: {}", evaluationId);
         return gradeRepository.findByEvaluationId(evaluationId, pageable)
-                .map(GradeResponseDTO::fromEntity);
+                .map(grade -> {
+                    GradeResponseDTO dto = GradeResponseDTO.fromEntity(grade);
+                    enrichWithStudentAndTeacherData(dto, grade);
+                    return dto;
+                });
     }
 
     /**
@@ -164,7 +185,9 @@ public class GradeService {
         // Publica evento Kafka
         publishGradeUpdatedEvent(updatedGrade);
 
-        return GradeResponseDTO.fromEntity(updatedGrade);
+        GradeResponseDTO dto = GradeResponseDTO.fromEntity(updatedGrade);
+        enrichWithStudentAndTeacherData(dto, updatedGrade);
+        return dto;
     }
 
     /**
@@ -304,6 +327,95 @@ public class GradeService {
 
         DistriSchoolEvent event = DistriSchoolEvent.of("grade.deleted", "grade-management-service", data);
         eventProducer.send(gradeDeletedTopic, event);
+    }
+
+    /**
+     * Enriquece o DTO com dados de estudantes e professores
+     * Busca dados dos microserviços via Feign de forma opcional (não falha se não conseguir)
+     */
+    private void enrichWithStudentAndTeacherData(GradeResponseDTO dto, Grade grade) {
+        // Buscar dados do estudante (opcional - não falha se não conseguir)
+        try {
+            Optional<Map<String, Object>> studentData = fetchStudentData(grade.getStudentId());
+            if (studentData.isPresent()) {
+                Map<String, Object> studentMap = studentData.get();
+                // O data do ApiResponse já é o Map com os dados do estudante
+                dto.setStudent(GradeResponseDTO.StudentInfo.builder()
+                        .id(grade.getStudentId())
+                        .fullName(getStringValue(studentMap, "fullName"))
+                        .email(getStringValue(studentMap, "email"))
+                        .registrationNumber(getStringValue(studentMap, "registrationNumber"))
+                        .course(getStringValue(studentMap, "course"))
+                        .build());
+            }
+        } catch (Exception e) {
+            log.debug("Não foi possível enriquecer com dados do estudante {}: {}", grade.getStudentId(), e.getMessage());
+        }
+
+        // Buscar dados do professor (opcional - não falha se não conseguir)
+        try {
+            Optional<Map<String, Object>> teacherData = fetchTeacherData(grade.getTeacherId());
+            if (teacherData.isPresent()) {
+                Map<String, Object> teacherMap = teacherData.get();
+                // O data do ApiResponse já é o Map com os dados do professor
+                dto.setTeacher(GradeResponseDTO.TeacherInfo.builder()
+                        .id(grade.getTeacherId())
+                        .name(getStringValue(teacherMap, "name"))
+                        .email(getStringValue(teacherMap, "email"))
+                        .employeeId(getStringValue(teacherMap, "employeeId"))
+                        .build());
+            }
+        } catch (Exception e) {
+            log.debug("Não foi possível enriquecer com dados do professor {}: {}", grade.getTeacherId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Helper para extrair valores String de um Map de forma segura
+     */
+    private String getStringValue(Map<String, Object> map, String key) {
+        if (map == null) return null;
+        Object value = map.get(key);
+        if (value == null) return null;
+        return value.toString();
+    }
+
+    /**
+     * Busca dados do estudante via Feign
+     */
+    private Optional<Map<String, Object>> fetchStudentData(Long studentId) {
+        try {
+            ApiResponse<Map<String, Object>> response = studentServiceClient.getStudentById(studentId);
+            if (response != null && response.isSuccess() && response.getData() != null) {
+                // Se o data já é um Map, retorna diretamente
+                // Se não, pode ser que a resposta já seja o Map completo
+                return Optional.of(response.getData());
+            }
+        } catch (FeignException.NotFound e) {
+            log.debug("Estudante {} não encontrado", studentId);
+        } catch (Exception e) {
+            log.debug("Erro ao buscar dados do estudante {}: {}", studentId, e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Busca dados do professor via Feign
+     */
+    private Optional<Map<String, Object>> fetchTeacherData(Long teacherId) {
+        try {
+            ApiResponse<Map<String, Object>> response = teacherServiceClient.getTeacherById(teacherId);
+            if (response != null && response.isSuccess() && response.getData() != null) {
+                // Se o data já é um Map, retorna diretamente
+                // Se não, pode ser que a resposta já seja o Map completo
+                return Optional.of(response.getData());
+            }
+        } catch (FeignException.NotFound e) {
+            log.debug("Professor {} não encontrado", teacherId);
+        } catch (Exception e) {
+            log.debug("Erro ao buscar dados do professor {}: {}", teacherId, e.getMessage());
+        }
+        return Optional.empty();
     }
 }
 

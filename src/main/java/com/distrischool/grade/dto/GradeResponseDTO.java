@@ -33,6 +33,33 @@ public class GradeResponseDTO {
     private LocalDateTime updatedAt;
     private String createdBy;
     private String updatedBy;
+    
+    // Dados opcionais de estudantes e professores (enriquecidos)
+    private StudentInfo student;
+    private TeacherInfo teacher;
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StudentInfo {
+        private Long id;
+        private String fullName;
+        private String email;
+        private String registrationNumber;
+        private String course;
+    }
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TeacherInfo {
+        private Long id;
+        private String name;
+        private String email;
+        private String employeeId;
+    }
 
     public static GradeResponseDTO fromEntity(Grade grade) {
         return GradeResponseDTO.builder()
