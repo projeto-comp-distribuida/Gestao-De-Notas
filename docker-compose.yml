@@ -126,7 +126,7 @@ services:
       SERVER_PORT: 8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_PROFILES_ACTIVE: dev
-      SECURITY_DISABLE: "false"
+      SECURITY_DISABLE: "true"
       AUTH0_DOMAIN: dev-lthr3fyfn4x47q1g.us.auth0.com
       AUTH0_AUDIENCE: https://api.distrischool.com
       SPRING_DEVTOOLS_RESTART_ENABLED: "true"

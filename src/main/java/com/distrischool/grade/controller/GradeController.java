@@ -32,6 +32,7 @@ import java.util.List;
 public class GradeController {
 
     private final GradeService gradeService;
+    private final com.distrischool.grade.config.SecurityConfig securityConfig;
 
     /**
      * Cria uma nova nota
@@ -40,7 +41,7 @@ public class GradeController {
      */
     @PostMapping
     @Timed(value = "grades.create", description = "Time taken to create a grade")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN') or @securityConfig.isSecurityDisabled()")
     public ResponseEntity<ApiResponse<GradeResponseDTO>> createGrade(
         @Valid @RequestBody GradeRequestDTO request,
         @RequestHeader(value = "X-User-Id", required = false) String userId,
@@ -48,12 +49,20 @@ public class GradeController {
 
         String effectiveUserId = userId != null ? userId : (jwt != null ? jwt.getSubject() : "system");
         
-        // Extrair roles do JWT
-        List<String> roles = jwt != null ? jwt.getClaimAsStringList("permissions") : List.of();
-        if (roles == null) {
-            roles = List.of();
+        // Extrair roles do JWT (se disponível)
+        List<String> roles = List.of();
+        String userRole = "SYSTEM";
+        if (jwt != null) {
+            try {
+                roles = jwt.getClaimAsStringList("permissions");
+                if (roles == null) {
+                    roles = List.of();
+                }
+                userRole = extractUserRole(roles, jwt);
+            } catch (Exception e) {
+                log.debug("Não foi possível extrair roles do JWT: {}", e.getMessage());
+            }
         }
-        String userRole = extractUserRole(roles, jwt);
         
         log.info("Requisição para criar nota - Aluno: {}, Avaliação: {} (by {}, role: {})", 
                  request.getStudentId(), request.getEvaluationId(), effectiveUserId, userRole);
@@ -154,7 +163,7 @@ public class GradeController {
      */
     @PutMapping("/{id}")
     @Timed(value = "grades.update", description = "Time taken to update a grade")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN') or @securityConfig.isSecurityDisabled()")
     public ResponseEntity<ApiResponse<GradeResponseDTO>> updateGrade(
         @PathVariable Long id,
         @Valid @RequestBody GradeRequestDTO request,
@@ -176,7 +185,7 @@ public class GradeController {
      */
     @DeleteMapping("/{id}")
     @Timed(value = "grades.delete", description = "Time taken to delete a grade")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN') or @securityConfig.isSecurityDisabled()")
     public ResponseEntity<ApiResponse<Void>> deleteGrade(
         @PathVariable Long id,
         @RequestHeader(value = "X-User-Id", required = false) String userId,

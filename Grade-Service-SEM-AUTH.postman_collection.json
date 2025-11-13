@@ -1,0 +1,193 @@
+{
+	"info": {
+		"_postman_id": "grade-service-sem-auth",
+		"name": "Grade Service - Sem Autenticação",
+		"description": "Collection para testar o serviço de notas sem autenticação",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/health",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "health"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Listar Todas as Notas",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/grades?page=0&size=20",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "grades"],
+					"query": [
+						{
+							"key": "page",
+							"value": "0"
+						},
+						{
+							"key": "size",
+							"value": "20"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Buscar Nota por ID",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/grades/1",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "grades", "1"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Buscar Notas por Estudante",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/grades/student/1?page=0&size=20",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "grades", "student", "1"],
+					"query": [
+						{
+							"key": "page",
+							"value": "0"
+						},
+						{
+							"key": "size",
+							"value": "20"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Buscar Notas por Avaliação",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/grades/evaluation/1?page=0&size=20",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "grades", "evaluation", "1"],
+					"query": [
+						{
+							"key": "page",
+							"value": "0"
+						},
+						{
+							"key": "size",
+							"value": "20"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Calcular Média do Estudante",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/grades/student/1/average?academicYear=2024&academicSemester=2",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "grades", "student", "1", "average"],
+					"query": [
+						{
+							"key": "academicYear",
+							"value": "2024"
+						},
+						{
+							"key": "academicSemester",
+							"value": "2"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Criar Nota",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"studentId\": 1,\n  \"teacherId\": 1,\n  \"evaluationId\": 1,\n  \"gradeValue\": 8.5,\n  \"gradeDate\": \"2024-11-02\",\n  \"academicYear\": 2024,\n  \"academicSemester\": 2,\n  \"notes\": \"Nota da primeira avaliação\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/grades",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "grades"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Atualizar Nota",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"studentId\": 1,\n  \"teacherId\": 1,\n  \"evaluationId\": 1,\n  \"gradeValue\": 9.0,\n  \"gradeDate\": \"2024-11-02\",\n  \"academicYear\": 2024,\n  \"academicSemester\": 2,\n  \"notes\": \"Nota atualizada\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/grades/1",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "grades", "1"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Deletar Nota",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/grades/1",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "grades", "1"]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8083",
+			"type": "string"
+		}
+	]
+}
+

@@ -42,7 +42,7 @@ public class SecurityConfig {
     @Value("${auth0.audience:}")
     private String audience;
 
-    @Value("${security.disable:false}")
+    @Value("${security.disable:${SECURITY_DISABLE:false}}")
     private boolean securityDisable;
 
     @Bean
@@ -53,8 +53,10 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         if (securityDisable) {
+            // Quando a segurança está desabilitada, permite todas as requisições
             http.authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         } else {
+            // Quando a segurança está habilitada, configura OAuth2 Resource Server
             http.authorizeHttpRequests(auth -> auth
                     .requestMatchers("/api/v1/health/**").permitAll()
                     .requestMatchers("/actuator/**").permitAll()
@@ -72,6 +74,9 @@ public class SecurityConfig {
     @Bean
     @ConditionalOnProperty(name = "security.disable", havingValue = "false", matchIfMissing = true)
     public JwtDecoder jwtDecoder() {
+        if (issuerUri == null || issuerUri.trim().isEmpty()) {
+            throw new IllegalStateException("JWT issuer URI is required when security is enabled");
+        }
         NimbusJwtDecoder jwtDecoder = (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(issuerUri);
 
         OAuth2TokenValidator<Jwt> withIssuer = org.springframework.security.oauth2.jwt.JwtValidators.createDefaultWithIssuer(issuerUri);

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -87,7 +88,7 @@ public class Evaluation extends BaseEntity {
     @DecimalMin(value = "0.0", message = "Peso deve ser maior ou igual a 0")
     @DecimalMax(value = "1.0", message = "Peso deve ser menor ou igual a 1")
     @Column(name = "weight", nullable = false, precision = 3, scale = 2)
-    private Double weight;
+    private BigDecimal weight;
 
     /**
      * Nota máxima possível

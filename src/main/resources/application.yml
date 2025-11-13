@@ -95,6 +95,10 @@ server:
 auth0:
   audience: ${AUTH0_AUDIENCE:https://distrischool.api}
 
+# Configuração de segurança
+security:
+  disable: ${SECURITY_DISABLE:true}
+
 # Configurações do Actuator
 management:
   endpoints:
