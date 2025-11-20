@@ -17,7 +17,15 @@ WORKDIR /app
 COPY --from=deps /root/.m2/repository /root/.m2/repository
 COPY . /app
 
-RUN mvn package -DskipTests
+RUN mvn package -DskipTests \
+    && for file in target/*.jar; do \
+        [ -f "$file" ] || continue; \
+        case "$file" in \
+            *original*) ;; \
+            *) cp "$file" /app/app.jar && break ;; \
+        esac; \
+    done \
+    && [ -f /app/app.jar ]
 
 # Stage 3: Desenvolvimento com hot reloading
 FROM maven:3.9-eclipse-temurin-17-alpine AS dev
@@ -47,7 +55,7 @@ LABEL maintainer="DistriSchool Team"
 WORKDIR /app
 
 # Copia o JAR construído
-COPY --from=build /app/target/microservice-template-1.0.0.jar /app/app.jar
+COPY --from=build /app/app.jar /app/app.jar
 
 # Cria usuário não-root para segurança
 RUN addgroup --system app && adduser -S -s /bin/false -G app app
