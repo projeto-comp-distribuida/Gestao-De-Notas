@@ -47,6 +47,13 @@ public class Grade extends BaseEntity {
     private Long teacherId;
 
     /**
+     * ID da turma (integração com microserviço de classes/horários)
+     */
+    @NotNull(message = "ID da turma é obrigatório")
+    @Column(name = "class_id")
+    private Long classId;
+
+    /**
      * ID da avaliação (referência à entidade Evaluation)
      */
     @NotNull(message = "ID da avaliação é obrigatório")

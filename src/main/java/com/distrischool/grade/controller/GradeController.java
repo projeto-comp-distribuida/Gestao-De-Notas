@@ -1,6 +1,7 @@
 package com.distrischool.grade.controller;
 
 import com.distrischool.grade.dto.ApiResponse;
+import com.distrischool.grade.dto.ClassGradeSummaryDTO;
 import com.distrischool.grade.dto.GradeRequestDTO;
 import com.distrischool.grade.dto.GradeResponseDTO;
 import com.distrischool.grade.service.GradeService;
@@ -134,6 +135,65 @@ public class GradeController {
         
         BigDecimal average = gradeService.calculateAverageGrade(studentId, academicYear, academicSemester);
         return ResponseEntity.ok(ApiResponse.success(average, "Média calculada com sucesso"));
+    }
+
+    /**
+     * Lista as notas agrupadas por aluno para uma turma específica.
+     * GET /api/v1/grades/classes/{classId}/grades
+     */
+    @GetMapping("/classes/{classId}/grades")
+    public ResponseEntity<ApiResponse<ClassGradeSummaryDTO>> getClassGrades(
+        @PathVariable Long classId,
+        @RequestParam(required = false) Integer academicYear,
+        @RequestParam(required = false) Integer academicSemester,
+        @RequestParam(defaultValue = "3") int maxGradesPerStudent) {
+
+        log.info("Requisição para listar notas da turma: {}, Ano: {}, Semestre: {}, Limite: {}",
+                 classId, academicYear, academicSemester, maxGradesPerStudent);
+
+        ClassGradeSummaryDTO summary = gradeService.getClassGradeDetails(
+                classId, academicYear, academicSemester, maxGradesPerStudent);
+
+        return ResponseEntity.ok(ApiResponse.success(summary, "Notas da turma recuperadas com sucesso"));
+    }
+
+    /**
+     * Calcula a média consolidada de uma turma.
+     * GET /api/v1/grades/classes/{classId}/average
+     */
+    @GetMapping("/classes/{classId}/average")
+    public ResponseEntity<ApiResponse<BigDecimal>> calculateClassAverage(
+        @PathVariable Long classId,
+        @RequestParam(required = false) Integer academicYear,
+        @RequestParam(required = false) Integer academicSemester,
+        @RequestParam(defaultValue = "3") int maxGradesPerStudent) {
+
+        log.info("Requisição para calcular média da turma: {}, Ano: {}, Semestre: {}",
+                 classId, academicYear, academicSemester);
+
+        BigDecimal average = gradeService.calculateClassAverage(
+                classId, academicYear, academicSemester, maxGradesPerStudent);
+
+        return ResponseEntity.ok(ApiResponse.success(average, "Média da turma calculada com sucesso"));
+    }
+
+    /**
+     * Calcula a média global considerando todas as turmas.
+     * GET /api/v1/grades/classes/average
+     */
+    @GetMapping("/classes/average")
+    public ResponseEntity<ApiResponse<BigDecimal>> calculateGlobalClassesAverage(
+        @RequestParam(required = false) Integer academicYear,
+        @RequestParam(required = false) Integer academicSemester,
+        @RequestParam(defaultValue = "3") int maxGradesPerStudent) {
+
+        log.info("Requisição para calcular média global entre turmas - Ano: {}, Semestre: {}",
+                 academicYear, academicSemester);
+
+        BigDecimal average = gradeService.calculateGlobalClassesAverage(
+                academicYear, academicSemester, maxGradesPerStudent);
+
+        return ResponseEntity.ok(ApiResponse.success(average, "Média global calculada com sucesso"));
     }
 
     /**

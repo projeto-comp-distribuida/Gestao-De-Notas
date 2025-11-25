@@ -56,5 +56,18 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
     
     @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL")
     Page<Grade> findAllNotDeleted(Pageable pageable);
+
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL AND g.classId = :classId " +
+           "AND (:academicYear IS NULL OR g.academicYear = :academicYear) " +
+           "AND (:academicSemester IS NULL OR g.academicSemester = :academicSemester)")
+    List<Grade> findClassGrades(@Param("classId") Long classId,
+                                @Param("academicYear") Integer academicYear,
+                                @Param("academicSemester") Integer academicSemester);
+
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL AND g.classId IS NOT NULL " +
+           "AND (:academicYear IS NULL OR g.academicYear = :academicYear) " +
+           "AND (:academicSemester IS NULL OR g.academicSemester = :academicSemester)")
+    List<Grade> findAllClassGrades(@Param("academicYear") Integer academicYear,
+                                   @Param("academicSemester") Integer academicSemester);
 }
 

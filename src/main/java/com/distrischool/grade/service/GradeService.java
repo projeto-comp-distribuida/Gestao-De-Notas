@@ -1,12 +1,15 @@
 package com.distrischool.grade.service;
 
 import com.distrischool.grade.dto.ApiResponse;
+import com.distrischool.grade.dto.ClassGradeSummaryDTO;
+import com.distrischool.grade.dto.ClassInfoDTO;
 import com.distrischool.grade.dto.GradeRequestDTO;
 import com.distrischool.grade.dto.GradeResponseDTO;
 import com.distrischool.grade.entity.Grade;
 import com.distrischool.grade.entity.Grade.GradeStatus;
 import com.distrischool.grade.exception.BusinessException;
 import com.distrischool.grade.exception.ResourceNotFoundException;
+import com.distrischool.grade.feign.ClassServiceClient;
 import com.distrischool.grade.feign.StudentServiceClient;
 import com.distrischool.grade.feign.TeacherServiceClient;
 import com.distrischool.grade.kafka.DistriSchoolEvent;
@@ -24,8 +27,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Service para gerenciamento de notas
@@ -40,6 +51,7 @@ public class GradeService {
     private final EventProducer eventProducer;
     private final StudentServiceClient studentServiceClient;
     private final TeacherServiceClient teacherServiceClient;
+    private final ClassServiceClient classServiceClient;
 
     @Value("${microservice.kafka.topics.grade-created}")
     private String gradeCreatedTopic;
@@ -67,6 +79,9 @@ public class GradeService {
         // Valida se o professor existe (integração com Teacher Service)
         validateTeacherExists(request.getTeacherId());
 
+        // Valida se a turma existe e se o estudante pertence a ela
+        validateClassAndStudent(request.getClassId(), request.getStudentId());
+
         // Verifica se já existe nota para este aluno nesta avaliação
         gradeRepository.findByStudentIdAndEvaluationId(request.getStudentId(), request.getEvaluationId())
                 .ifPresent(g -> {
@@ -77,6 +92,7 @@ public class GradeService {
         Grade grade = Grade.builder()
                 .studentId(request.getStudentId())
                 .teacherId(request.getTeacherId())
+                .classId(request.getClassId())
                 .evaluationId(request.getEvaluationId())
                 .gradeValue(request.getGradeValue())
                 .gradeDate(request.getGradeDate())
@@ -149,6 +165,11 @@ public class GradeService {
         Grade grade = findGradeByIdOrThrow(id);
         validateGradeRequest(request);
 
+        if (!Objects.equals(grade.getClassId(), request.getClassId())) {
+            validateClassAndStudent(request.getClassId(), grade.getStudentId());
+            grade.setClassId(request.getClassId());
+        }
+
         // Atualiza os campos
         grade.setGradeValue(request.getGradeValue());
         grade.setGradeDate(request.getGradeDate());
@@ -197,6 +218,229 @@ public class GradeService {
     }
 
     /**
+     * Retorna o detalhamento das notas de uma turma (classe).
+     */
+    public ClassGradeSummaryDTO getClassGradeDetails(Long classId,
+                                                     Integer academicYear,
+                                                     Integer academicSemester,
+                                                     int maxGradesPerStudent) {
+        log.debug("Listando notas da turma: {}, Ano: {}, Semestre: {}, Limite: {}", 
+                  classId, academicYear, academicSemester, maxGradesPerStudent);
+
+        int normalizedLimit = normalizeMaxGradesLimit(maxGradesPerStudent);
+        ClassInfoDTO classInfo = fetchClassInfo(classId);
+        List<Grade> grades = loadGradesForClass(classId, academicYear, academicSemester);
+
+        return buildClassGradeSummary(classInfo, grades, normalizedLimit);
+    }
+
+    /**
+     * Calcula a média consolidada de uma turma considerando até 3 notas por aluno.
+     */
+    public BigDecimal calculateClassAverage(Long classId,
+                                            Integer academicYear,
+                                            Integer academicSemester,
+                                            int maxGradesPerStudent) {
+        ClassGradeSummaryDTO summary = getClassGradeDetails(classId, academicYear, academicSemester, maxGradesPerStudent);
+        return summary.getClassAverage();
+    }
+
+    /**
+     * Calcula a média geral entre todas as turmas que possuem notas registradas.
+     */
+    public BigDecimal calculateGlobalClassesAverage(Integer academicYear,
+                                                    Integer academicSemester,
+                                                    int maxGradesPerStudent) {
+        log.debug("Calculando média global entre turmas - Ano: {}, Semestre: {}", academicYear, academicSemester);
+
+        int normalizedLimit = normalizeMaxGradesLimit(maxGradesPerStudent);
+        List<Grade> grades = loadAllClassGrades(academicYear, academicSemester);
+
+        if (grades.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        Map<Long, List<Grade>> gradesByStudent = grades.stream()
+                .collect(Collectors.groupingBy(Grade::getStudentId));
+
+        List<BigDecimal> studentAverages = gradesByStudent.values().stream()
+                .map(studentGrades -> calculateAverage(selectGradesForStudent(studentGrades, normalizedLimit)))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        if (studentAverages.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal total = studentAverages.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return total.divide(BigDecimal.valueOf(studentAverages.size()), 2, RoundingMode.HALF_UP);
+    }
+
+    private List<Grade> loadGradesForClass(Long classId, Integer academicYear, Integer academicSemester) {
+        return gradeRepository.findClassGrades(classId, academicYear, academicSemester);
+    }
+
+    private List<Grade> loadAllClassGrades(Integer academicYear, Integer academicSemester) {
+        return gradeRepository.findAllClassGrades(academicYear, academicSemester);
+    }
+
+    private ClassGradeSummaryDTO buildClassGradeSummary(ClassInfoDTO classInfo,
+                                                        List<Grade> grades,
+                                                        int maxGradesPerStudent) {
+        Map<Long, List<Grade>> gradesByStudent = grades.stream()
+                .collect(Collectors.groupingBy(Grade::getStudentId));
+
+        LinkedHashSet<Long> orderedStudentIds = new LinkedHashSet<>();
+        if (classInfo.getStudentIds() != null) {
+            orderedStudentIds.addAll(classInfo.getStudentIds());
+        }
+        gradesByStudent.keySet().stream()
+                .filter(studentId -> !orderedStudentIds.contains(studentId))
+                .sorted()
+                .forEach(orderedStudentIds::add);
+
+        List<ClassGradeSummaryDTO.StudentClassGradeDTO> studentSummaries = orderedStudentIds.stream()
+                .map(studentId -> buildStudentSummary(studentId, gradesByStudent.get(studentId), maxGradesPerStudent))
+                .collect(Collectors.toList());
+
+        long studentsWithGrades = studentSummaries.stream()
+                .filter(dto -> dto.getAverage() != null)
+                .count();
+
+        BigDecimal classAverage = studentSummaries.stream()
+                .map(ClassGradeSummaryDTO.StudentClassGradeDTO::getAverage)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (studentsWithGrades > 0) {
+            classAverage = classAverage.divide(BigDecimal.valueOf(studentsWithGrades), 2, RoundingMode.HALF_UP);
+        } else if (!studentSummaries.isEmpty()) {
+            classAverage = BigDecimal.ZERO;
+        }
+
+        return ClassGradeSummaryDTO.builder()
+                .classId(classInfo.getId())
+                .className(classInfo.getName())
+                .classCode(classInfo.getCode())
+                .period(classInfo.getPeriod())
+                .academicYear(classInfo.getAcademicYear())
+                .totalStudents(orderedStudentIds.size())
+                .studentsWithGrades((int) studentsWithGrades)
+                .maxGradesPerStudent(maxGradesPerStudent)
+                .classAverage(classAverage != null ? classAverage : BigDecimal.ZERO)
+                .students(studentSummaries)
+                .build();
+    }
+
+    private ClassGradeSummaryDTO.StudentClassGradeDTO buildStudentSummary(Long studentId,
+                                                                          List<Grade> grades,
+                                                                          int maxGradesPerStudent) {
+        List<Grade> selectedGrades = selectGradesForStudent(grades != null ? grades : List.of(), maxGradesPerStudent);
+        ClassGradeSummaryDTO.StudentClassGradeDTO.StudentClassGradeDTOBuilder builder =
+                ClassGradeSummaryDTO.StudentClassGradeDTO.builder()
+                        .studentId(studentId)
+                        .grades(selectedGrades.stream()
+                                .map(this::toGradeSnapshot)
+                                .collect(Collectors.toList()));
+
+        if (!selectedGrades.isEmpty()) {
+            builder.average(calculateAverage(selectedGrades));
+        }
+
+        return builder.build();
+    }
+
+    private List<Grade> selectGradesForStudent(List<Grade> grades, int maxGradesPerStudent) {
+        if (grades == null || grades.isEmpty()) {
+            return List.of();
+        }
+
+        return grades.stream()
+                .sorted(Comparator
+                        .comparing(Grade::getGradeDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Grade::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(maxGradesPerStudent)
+                .collect(Collectors.toList());
+    }
+
+    private ClassGradeSummaryDTO.GradeSnapshotDTO toGradeSnapshot(Grade grade) {
+        return ClassGradeSummaryDTO.GradeSnapshotDTO.builder()
+                .gradeId(grade.getId())
+                .evaluationId(grade.getEvaluationId())
+                .gradeValue(grade.getGradeValue())
+                .gradeDate(grade.getGradeDate())
+                .academicYear(grade.getAcademicYear())
+                .academicSemester(grade.getAcademicSemester())
+                .build();
+    }
+
+    private BigDecimal calculateAverage(List<Grade> grades) {
+        if (grades == null || grades.isEmpty()) {
+            return null;
+        }
+
+        BigDecimal total = grades.stream()
+                .map(Grade::getGradeValue)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (total.compareTo(BigDecimal.ZERO) == 0 && grades.stream().allMatch(g -> g.getGradeValue() == null)) {
+            return null;
+        }
+
+        int divisor = (int) grades.stream().map(Grade::getGradeValue).filter(Objects::nonNull).count();
+        if (divisor == 0) {
+            return null;
+        }
+
+        return total.divide(BigDecimal.valueOf(divisor), 2, RoundingMode.HALF_UP);
+    }
+
+    private int normalizeMaxGradesLimit(int limit) {
+        if (limit < 1) {
+            return 1;
+        }
+        return Math.min(limit, 3);
+    }
+
+    private ClassInfoDTO validateClassAndStudent(Long classId, Long studentId) {
+        ClassInfoDTO classInfo = fetchClassInfo(classId);
+        validateStudentBelongsToClass(studentId, classInfo);
+        return classInfo;
+    }
+
+    private ClassInfoDTO fetchClassInfo(Long classId) {
+        try {
+            ApiResponse<ClassInfoDTO> response = classServiceClient.getClassById(classId);
+            if (response == null || !response.isSuccess() || response.getData() == null) {
+                throw new BusinessException("Turma não encontrada com ID: " + classId);
+            }
+            return response.getData();
+        } catch (FeignException.NotFound e) {
+            log.warn("Turma não encontrada - ID: {}", classId);
+            throw new BusinessException("Turma não encontrada com ID: " + classId);
+        } catch (FeignException e) {
+            log.error("Erro ao validar turma - ID: {}, Erro: {}", classId, e.getMessage());
+            throw new BusinessException("Erro ao validar turma. Tente novamente mais tarde.");
+        } catch (Exception e) {
+            log.error("Erro inesperado ao validar turma - ID: {}", classId, e);
+            throw new BusinessException("Erro ao validar turma: " + e.getMessage());
+        }
+    }
+
+    private void validateStudentBelongsToClass(Long studentId, ClassInfoDTO classInfo) {
+        List<Long> studentIds = classInfo.getStudentIds();
+        if (studentId == null) {
+            throw new BusinessException("ID do aluno é obrigatório");
+        }
+        if (studentIds != null && !studentIds.isEmpty() && !studentIds.contains(studentId)) {
+            throw new BusinessException(String.format("Aluno %d não pertence à turma %d", studentId, classInfo.getId()));
+        }
+    }
+
+    /**
      * Busca nota por ID ou lança exceção
      */
     private Grade findGradeByIdOrThrow(Long id) {
@@ -209,6 +453,9 @@ public class GradeService {
      * Valida a requisição de nota
      */
     private void validateGradeRequest(GradeRequestDTO request) {
+        if (request.getClassId() == null) {
+            throw new BusinessException("ID da turma é obrigatório");
+        }
         if (request.getGradeValue() == null) {
             throw new BusinessException("Valor da nota é obrigatório");
         }

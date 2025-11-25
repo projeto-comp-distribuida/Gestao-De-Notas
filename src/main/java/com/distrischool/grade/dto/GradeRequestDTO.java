@@ -22,6 +22,9 @@ public class GradeRequestDTO {
     @NotNull(message = "ID do professor é obrigatório")
     private Long teacherId;
 
+    @NotNull(message = "ID da turma é obrigatório")
+    private Long classId;
+
     @NotNull(message = "ID da avaliação é obrigatório")
     private Long evaluationId;
 

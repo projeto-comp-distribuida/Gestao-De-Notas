@@ -20,6 +20,7 @@ public class GradeResponseDTO {
     private Long id;
     private Long studentId;
     private Long teacherId;
+    private Long classId;
     private Long evaluationId;
     private BigDecimal gradeValue;
     private LocalDate gradeDate;
@@ -39,6 +40,7 @@ public class GradeResponseDTO {
                 .id(grade.getId())
                 .studentId(grade.getStudentId())
                 .teacherId(grade.getTeacherId())
+                .classId(grade.getClassId())
                 .evaluationId(grade.getEvaluationId())
                 .gradeValue(grade.getGradeValue())
                 .gradeDate(grade.getGradeDate())

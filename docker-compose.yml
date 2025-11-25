@@ -146,6 +146,7 @@ services:
       SPRING_FLYWAY_ENABLED: "true"
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      CLASS_SERVICE_URL: http://schedule-management-service-dev:8080
     volumes:
       # Monta o código fonte para hot reloading
       - ./src:/app/src:rw

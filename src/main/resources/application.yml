@@ -155,6 +155,8 @@ microservice:
     url: ${STUDENT_SERVICE_URL:http://student-management-service-dev:8080}
   teacher:
     url: ${TEACHER_SERVICE_URL:http://microservice-template-dev:8080}
+  class:
+    url: ${CLASS_SERVICE_URL:http://schedule-management-service-dev:8080}
   kafka:
     topics:
       # Tópicos de eventos de notas
