@@ -36,14 +36,25 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:}")
-    private String issuerUri;
+    @Value("${AUTH0_DOMAIN:}")
+    private String auth0Domain;
 
     @Value("${auth0.audience:}")
     private String audience;
 
     @Value("${security.disable:false}")
     private boolean securityDisable;
+    
+    private String getIssuerUri() {
+        if (auth0Domain == null || auth0Domain.isEmpty()) {
+            return "https://dev-lthr3fyfn4x47q1g.us.auth0.com/";
+        }
+        // Se já contém https://, usar como está, senão adicionar
+        if (auth0Domain.startsWith("https://")) {
+            return auth0Domain.endsWith("/") ? auth0Domain : auth0Domain + "/";
+        }
+        return "https://" + auth0Domain + "/";
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -72,6 +83,7 @@ public class SecurityConfig {
     @Bean
     @ConditionalOnProperty(name = "security.disable", havingValue = "false", matchIfMissing = true)
     public JwtDecoder jwtDecoder() {
+        String issuerUri = getIssuerUri();
         NimbusJwtDecoder jwtDecoder = (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(issuerUri);
 
         OAuth2TokenValidator<Jwt> withIssuer = org.springframework.security.oauth2.jwt.JwtValidators.createDefaultWithIssuer(issuerUri);

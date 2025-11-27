@@ -27,8 +27,14 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
     
     Optional<Grade> findByStudentIdAndEvaluationId(Long studentId, Long evaluationId);
     
-    Page<Grade> findByStudentIdAndSubjectId(
-        Long studentId, Long subjectId, Pageable pageable);
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL " +
+           "AND g.studentId = :studentId " +
+           "AND g.evaluationId IN " +
+           "(SELECT e.id FROM Evaluation e WHERE e.subjectId = :subjectId)")
+    Page<Grade> findGradesByStudentAndSubject(
+        @Param("studentId") Long studentId, 
+        @Param("subjectId") Long subjectId, 
+        Pageable pageable);
     
     Page<Grade> findByStatus(GradeStatus status, Pageable pageable);
     

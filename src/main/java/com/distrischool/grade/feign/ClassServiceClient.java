@@ -22,3 +22,4 @@ public interface ClassServiceClient {
     ApiResponse<ClassInfoDTO> getClassById(@PathVariable Long id);
 }
 
+

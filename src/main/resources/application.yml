@@ -87,6 +87,13 @@ spring:
       restart:
         enabled: true
 
+  # Configuração de Segurança OAuth2
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://${AUTH0_DOMAIN:dev-lthr3fyfn4x47q1g.us.auth0.com}/
+
 server:
   port: ${SERVER_PORT:8083}
   shutdown: graceful
