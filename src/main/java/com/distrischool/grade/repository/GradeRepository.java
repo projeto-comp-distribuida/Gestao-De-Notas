@@ -16,34 +16,54 @@ import java.util.Optional;
 @Repository
 public interface GradeRepository extends JpaRepository<Grade, Long> {
 
-    Page<Grade> findByStudentId(Long studentId, Pageable pageable);
-    Page<Grade> findByTeacherId(Long teacherId, Pageable pageable);
-    Page<Grade> findByEvaluationId(Long evaluationId, Pageable pageable);
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL AND g.studentId = :studentId")
+    Page<Grade> findByStudentId(@Param("studentId") Long studentId, Pageable pageable);
     
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL AND g.teacherId = :teacherId")
+    Page<Grade> findByTeacherId(@Param("teacherId") Long teacherId, Pageable pageable);
+    
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL AND g.evaluationId = :evaluationId")
+    Page<Grade> findByEvaluationId(@Param("evaluationId") Long evaluationId, Pageable pageable);
+    
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL " +
+           "AND g.studentId = :studentId " +
+           "AND g.academicYear = :academicYear " +
+           "AND g.academicSemester = :academicSemester")
     List<Grade> findByStudentIdAndAcademicYearAndAcademicSemester(
-        Long studentId, Integer academicYear, Integer academicSemester);
+        @Param("studentId") Long studentId, 
+        @Param("academicYear") Integer academicYear, 
+        @Param("academicSemester") Integer academicSemester);
     
-    List<Grade> findByEvaluationIdAndStudentId(Long evaluationId, Long studentId);
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL " +
+           "AND g.evaluationId = :evaluationId AND g.studentId = :studentId")
+    List<Grade> findByEvaluationIdAndStudentId(
+        @Param("evaluationId") Long evaluationId, 
+        @Param("studentId") Long studentId);
     
-    Optional<Grade> findByStudentIdAndEvaluationId(Long studentId, Long evaluationId);
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL " +
+           "AND g.studentId = :studentId AND g.evaluationId = :evaluationId")
+    Optional<Grade> findByStudentIdAndEvaluationId(
+        @Param("studentId") Long studentId, 
+        @Param("evaluationId") Long evaluationId);
     
     @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL " +
            "AND g.studentId = :studentId " +
            "AND g.evaluationId IN " +
-           "(SELECT e.id FROM Evaluation e WHERE e.subjectId = :subjectId)")
+           "(SELECT e.id FROM Evaluation e WHERE e.deletedAt IS NULL AND e.subjectId = :subjectId)")
     Page<Grade> findGradesByStudentAndSubject(
         @Param("studentId") Long studentId, 
         @Param("subjectId") Long subjectId, 
         Pageable pageable);
     
-    Page<Grade> findByStatus(GradeStatus status, Pageable pageable);
+    @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL AND g.status = :status")
+    Page<Grade> findByStatus(@Param("status") GradeStatus status, Pageable pageable);
     
     @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL " +
            "AND g.studentId = :studentId " +
            "AND g.academicYear = :academicYear " +
            "AND g.academicSemester = :academicSemester " +
            "AND (:subjectId IS NULL OR g.evaluationId IN " +
-           "(SELECT e.id FROM Evaluation e WHERE e.subjectId = :subjectId))")
+           "(SELECT e.id FROM Evaluation e WHERE e.deletedAt IS NULL AND e.subjectId = :subjectId))")
     Page<Grade> findStudentGrades(@Param("studentId") Long studentId,
                                   @Param("academicYear") Integer academicYear,
                                   @Param("academicSemester") Integer academicSemester,
@@ -57,8 +77,14 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
                                      @Param("academicYear") Integer academicYear,
                                      @Param("academicSemester") Integer academicSemester);
     
+    @Query("SELECT COUNT(g) FROM Grade g WHERE g.deletedAt IS NULL " +
+           "AND g.studentId = :studentId " +
+           "AND g.academicYear = :academicYear " +
+           "AND g.academicSemester = :academicSemester")
     long countByStudentIdAndAcademicYearAndAcademicSemester(
-        Long studentId, Integer academicYear, Integer academicSemester);
+        @Param("studentId") Long studentId, 
+        @Param("academicYear") Integer academicYear, 
+        @Param("academicSemester") Integer academicSemester);
     
     @Query("SELECT g FROM Grade g WHERE g.deletedAt IS NULL")
     Page<Grade> findAllNotDeleted(Pageable pageable);

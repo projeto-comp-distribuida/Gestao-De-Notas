@@ -23,7 +23,8 @@ public class EventConsumer {
      */
     @KafkaListener(
         topics = "${microservice.kafka.topics.student-created:distrischool.student.created}",
-        groupId = "${spring.application.name}-group"
+        groupId = "${spring.application.name}-group",
+        containerFactory = "kafkaListenerContainerFactory"
     )
     public void consumeStudentCreatedEvent(DistriSchoolEvent event) {
         log.info("Evento recebido - Student Created: {}", event.getEventId());
@@ -45,7 +46,8 @@ public class EventConsumer {
      */
     @KafkaListener(
         topics = "${microservice.kafka.topics.student-updated:distrischool.student.updated}",
-        groupId = "${spring.application.name}-group"
+        groupId = "${spring.application.name}-group",
+        containerFactory = "kafkaListenerContainerFactory"
     )
     public void consumeStudentUpdatedEvent(DistriSchoolEvent event) {
         log.info("Evento recebido - Student Updated: {}", event.getEventId());
@@ -67,7 +69,8 @@ public class EventConsumer {
      */
     @KafkaListener(
         topics = "${microservice.kafka.topics.student-deleted:distrischool.student.deleted}",
-        groupId = "${spring.application.name}-group"
+        groupId = "${spring.application.name}-group",
+        containerFactory = "kafkaListenerContainerFactory"
     )
     public void consumeStudentDeletedEvent(DistriSchoolEvent event) {
         log.info("Evento recebido - Student Deleted: {}", event.getEventId());
@@ -89,7 +92,8 @@ public class EventConsumer {
      */
     @KafkaListener(
         topics = "${microservice.kafka.topics.teacher-created:distrischool.teacher.created}",
-        groupId = "${spring.application.name}-group"
+        groupId = "${spring.application.name}-group",
+        containerFactory = "kafkaListenerContainerFactory"
     )
     public void consumeTeacherCreatedEvent(DistriSchoolEvent event) {
         log.info("Evento recebido - Teacher Created: {}", event.getEventId());

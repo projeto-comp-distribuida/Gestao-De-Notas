@@ -104,6 +104,23 @@ public class GradeController {
     }
 
     /**
+     * Busca notas por userId (busca o studentId associado e retorna as notas)
+     * GET /api/v1/grades/user/{userId}
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<ApiResponse<Page<GradeResponseDTO>>> getGradesByUserId(
+        @PathVariable Long userId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size) {
+
+        log.info("Requisição para buscar notas do usuário: {}", userId);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "gradeDate"));
+        Page<GradeResponseDTO> grades = gradeService.getGradesByUserId(userId, pageable);
+
+        return ResponseEntity.ok(ApiResponse.success(grades));
+    }
+
+    /**
      * Busca notas por avaliação
      * GET /api/v1/grades/evaluation/{evaluationId}
      */

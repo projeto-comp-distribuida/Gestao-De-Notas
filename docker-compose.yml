@@ -13,24 +13,24 @@ version: '3.8'
 # Produção roda em Kubernetes (Azure AKS), não em Docker Compose
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database - Instância única com múltiplos bancos de dados
   postgres:
     image: postgres:15-alpine
-    container_name: postgres-grades
+    container_name: postgres-distrischool
     environment:
-      POSTGRES_DB: distrischool_grades
+      POSTGRES_DB: postgres
       POSTGRES_USER: distrischool
       POSTGRES_PASSWORD: distrischool123
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5436:5432"
+      - "5443:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
     networks:
       - distrischool-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U distrischool -d distrischool_grades"]
+      test: ["CMD-SHELL", "pg_isready -U distrischool -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -104,6 +104,203 @@ services:
     networks:
       - distrischool-network
 
+  # Microserviço Auth - usando imagem do Azure Container Registry (ACR)
+  microservice-auth-dev:
+    image: distrischooldevacr.azurecr.io/microservice-auth:latest
+    container_name: microservice-auth-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "5005:5005"   # Debug remoto
+      - "35729:35729" # LiveReload
+    environment:
+      SERVER_PORT: 8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DEVTOOLS_RESTART_ENABLED: "true"
+      SPRING_DEVTOOLS_LIVERELOAD_ENABLED: "true"
+      SPRING_DEVTOOLS_RESTART_POLL_INTERVAL: "1000"
+      SPRING_DEVTOOLS_RESTART_QUIET_PERIOD: "400"
+      # Configurações do PostgreSQL
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/distrischool_auth
+      SPRING_DATASOURCE_USERNAME: distrischool
+      SPRING_DATASOURCE_PASSWORD: distrischool123
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      # Configurações do Redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ""
+      # Configurações do Flyway
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      # Configurações Auth0
+      AUTH0_ENABLED: ${AUTH0_ENABLED:-true}
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN}
+      AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID}
+      AUTH0_CLIENT_SECRET: ${AUTH0_CLIENT_SECRET}
+      AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
+      AUTH0_CONNECTION: ${AUTH0_CONNECTION:-Username-Password-Authentication}
+      # Configurações JWT
+      JWT_SECRET: ${JWT_SECRET:-default-secret-key-change-in-production-minimum-256-bits}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+      # Configurações CORS
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8080}
+    networks:
+      - distrischool-network
+
+  # Microserviço Student Management - usando imagem do Azure Container Registry (ACR)
+  student-management-service-dev:
+    image: distrischooldevacr.azurecr.io/microservice-student-management-service:latest
+    container_name: student-management-service-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+      - "5006:5005"   # Debug remoto
+      - "35730:35729" # LiveReload
+    environment:
+      SERVER_PORT: 8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_PROFILES_ACTIVE: dev
+      SECURITY_DISABLE: "false"
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN}
+      AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
+      SPRING_DEVTOOLS_RESTART_ENABLED: "true"
+      SPRING_DEVTOOLS_LIVERELOAD_ENABLED: "true"
+      SPRING_DEVTOOLS_RESTART_POLL_INTERVAL: "1000"
+      SPRING_DEVTOOLS_RESTART_QUIET_PERIOD: "400"
+      # Configurações do PostgreSQL
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/distrischool_students
+      SPRING_DATASOURCE_USERNAME: distrischool
+      SPRING_DATASOURCE_PASSWORD: distrischool123
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      # Configurações do Redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ""
+      # Configurações do Flyway
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+    networks:
+      - distrischool-network
+
+  # Microserviço Teacher Management - usando imagem do Azure Container Registry (ACR)
+  teacher-management-service-dev:
+    image: distrischooldevacr.azurecr.io/microservice-teacher-management-service:latest
+    container_name: teacher-management-service-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8082:8080"
+      - "5010:5005"   # Debug remoto
+      - "35734:35729" # LiveReload
+    environment:
+      SERVER_PORT: 8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_PROFILES_ACTIVE: dev
+      SECURITY_DISABLE: "false"
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN}
+      AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
+      SPRING_DEVTOOLS_RESTART_ENABLED: "true"
+      SPRING_DEVTOOLS_LIVERELOAD_ENABLED: "true"
+      SPRING_DEVTOOLS_RESTART_POLL_INTERVAL: "1000"
+      SPRING_DEVTOOLS_RESTART_QUIET_PERIOD: "400"
+      # Configurações do PostgreSQL
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/distrischool_teachers
+      SPRING_DATASOURCE_USERNAME: distrischool
+      SPRING_DATASOURCE_PASSWORD: distrischool123
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      # Configurações do Redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ""
+      # Configurações do Flyway
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+    networks:
+      - distrischool-network
+
+  # Microserviço Schedule Management - Ambiente de Desenvolvimento com Hot Reloading
+  schedule-management-service-dev:
+    build:
+      context: ../Gestao-de-Turmas-e-Horarios
+      dockerfile: Dockerfile
+      target: dev
+    container_name: schedule-management-service-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8084:8080"
+      - "5009:5005"   # Porta para debug remoto
+      - "35732:35729" # Porta para LiveReload
+    environment:
+      SERVER_PORT: 8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_PROFILES_ACTIVE: dev
+      MICROSERVICE_AUTH_URL: http://microservice-auth-dev:8080
+      SECURITY_DISABLE: "${SECURITY_DISABLE:-false}"
+      AUTH0_DOMAIN: "${AUTH0_DOMAIN:-dev-example.us.auth0.com}"
+      AUTH0_AUDIENCE: "${AUTH0_AUDIENCE:-https://distrischool.api}"
+      AUTH0_ISSUER_URI: "${AUTH0_ISSUER_URI:-}"
+      AUTH0_CLIENT_ID: "${AUTH0_CLIENT_ID:-local-dev}"
+      AUTH0_CLIENT_SECRET: "${AUTH0_CLIENT_SECRET:-local-dev-secret}"
+      AUTH0_CONNECTION: "${AUTH0_CONNECTION:-Username-Password-Authentication}"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${AUTH0_ISSUER_URI:-}"
+      SPRING_DEVTOOLS_RESTART_ENABLED: "true"
+      SPRING_DEVTOOLS_LIVERELOAD_ENABLED: "true"
+      SPRING_DEVTOOLS_RESTART_POLL_INTERVAL: "1000"
+      SPRING_DEVTOOLS_RESTART_QUIET_PERIOD: "400"
+      # Configurações do PostgreSQL
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/distrischool_schedules
+      SPRING_DATASOURCE_USERNAME: distrischool
+      SPRING_DATASOURCE_PASSWORD: distrischool123
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      # Configurações do Redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ""
+      # Configurações do Flyway
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      # URLs dos microserviços
+      STUDENT_SERVICE_URL: http://student-management-service-dev:8080
+      TEACHER_SERVICE_URL: http://teacher-management-service-dev:8080
+      AUTH_SERVICE_URL: http://microservice-auth-dev:8080
+    volumes:
+      # Monta o código fonte para hot reloading
+      - ../Gestao-de-Turmas-e-Horarios/src:/app/src:rw
+      # Monta o pom.xml para detectar mudanças de dependências
+      - ../Gestao-de-Turmas-e-Horarios/pom.xml:/app/pom.xml:rw
+      # Cache do Maven para não baixar dependências toda vez
+      - maven-cache:/root/.m2
+    networks:
+      - distrischool-network
+
   # Microserviço de Gestão de Notas - Ambiente de Desenvolvimento com Hot Reloading
   grade-management-service-dev:
     build:
@@ -118,10 +315,18 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      microservice-auth-dev:
+        condition: service_started
+      student-management-service-dev:
+        condition: service_started
+      teacher-management-service-dev:
+        condition: service_started
+      schedule-management-service-dev:
+        condition: service_started
     ports:
       - "8083:8080"
       - "5007:5005"   # Porta para debug remoto
-      - "35731:35729" # Porta para LiveReload
+      - "35733:35729" # Porta para LiveReload
     environment:
       SERVER_PORT: 8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -146,7 +351,11 @@ services:
       SPRING_FLYWAY_ENABLED: "true"
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      # URLs dos microserviços
       CLASS_SERVICE_URL: http://schedule-management-service-dev:8080
+      AUTH_SERVICE_URL: http://microservice-auth-dev:8080
+      STUDENT_SERVICE_URL: http://student-management-service-dev:8080
+      TEACHER_SERVICE_URL: http://teacher-management-service-dev:8080
     volumes:
       # Monta o código fonte para hot reloading
       - ./src:/app/src:rw

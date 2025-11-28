@@ -9,9 +9,9 @@ import com.distrischool.grade.entity.Grade;
 import com.distrischool.grade.entity.Grade.GradeStatus;
 import com.distrischool.grade.exception.BusinessException;
 import com.distrischool.grade.exception.ResourceNotFoundException;
+import com.distrischool.grade.feign.AuthServiceClient;
 import com.distrischool.grade.feign.ClassServiceClient;
 import com.distrischool.grade.feign.StudentServiceClient;
-import com.distrischool.grade.feign.TeacherServiceClient;
 import com.distrischool.grade.kafka.DistriSchoolEvent;
 import com.distrischool.grade.kafka.EventProducer;
 import com.distrischool.grade.repository.GradeRepository;
@@ -28,14 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -50,8 +48,8 @@ public class GradeService {
     private final GradeRepository gradeRepository;
     private final EventProducer eventProducer;
     private final StudentServiceClient studentServiceClient;
-    private final TeacherServiceClient teacherServiceClient;
     private final ClassServiceClient classServiceClient;
+    private final AuthServiceClient authServiceClient;
 
     @Value("${microservice.kafka.topics.grade-created}")
     private String gradeCreatedTopic;
@@ -75,9 +73,6 @@ public class GradeService {
 
         // Valida se o estudante existe (integração com Student Service)
         validateStudentExists(request.getStudentId());
-
-        // Valida se o professor existe (integração com Teacher Service)
-        validateTeacherExists(request.getTeacherId());
 
         // Valida se a turma existe e se o estudante pertence a ela
         validateClassAndStudent(request.getClassId(), request.getStudentId());
@@ -152,6 +147,77 @@ public class GradeService {
         log.debug("Buscando notas da avaliação: {}", evaluationId);
         return gradeRepository.findByEvaluationId(evaluationId, pageable)
                 .map(GradeResponseDTO::fromEntity);
+    }
+
+    /**
+     * Busca notas por userId (busca o studentId associado e retorna as notas)
+     */
+    public Page<GradeResponseDTO> getGradesByUserId(Long userId, Pageable pageable) {
+        log.debug("Buscando notas para userId: {}", userId);
+        
+        // Busca o studentId através do auth service
+        Long studentId = getStudentIdByUserId(userId);
+        
+        if (studentId == null) {
+            throw new BusinessException("Usuário não possui um studentId associado");
+        }
+        
+        log.debug("StudentId encontrado para userId {}: {}", userId, studentId);
+        return getGradesByStudent(studentId, pageable);
+    }
+
+    /**
+     * Busca o studentId associado a um userId através do auth service
+     */
+    private Long getStudentIdByUserId(Long userId) {
+        try {
+            // Tenta primeiro o endpoint específico para student-id
+            ApiResponse<Map<String, Object>> response = null;
+            try {
+                response = authServiceClient.getStudentIdByUserId(userId);
+            } catch (FeignException.NotFound e) {
+                log.debug("Endpoint /student-id não encontrado, tentando endpoint genérico");
+                // Se não encontrar, tenta o endpoint genérico
+                response = authServiceClient.getUserById(userId);
+            }
+            
+            if (response == null || !response.isSuccess() || response.getData() == null) {
+                log.warn("Não foi possível encontrar studentId para userId: {}", userId);
+                return null;
+            }
+            
+            Map<String, Object> data = response.getData();
+            Object studentIdObj = data.get("studentId");
+            
+            if (studentIdObj == null) {
+                log.warn("Resposta do auth service não contém studentId para userId: {}", userId);
+                return null;
+            }
+            
+            // Converte o studentId para Long
+            if (studentIdObj instanceof Number) {
+                return ((Number) studentIdObj).longValue();
+            } else if (studentIdObj instanceof String) {
+                try {
+                    return Long.parseLong((String) studentIdObj);
+                } catch (NumberFormatException e) {
+                    log.error("Erro ao converter studentId para Long: {}", studentIdObj, e);
+                    return null;
+                }
+            }
+            
+            log.warn("Tipo de studentId não suportado: {}", studentIdObj.getClass());
+            return null;
+        } catch (FeignException.NotFound e) {
+            log.warn("Usuário não encontrado - userId: {}", userId);
+            return null;
+        } catch (FeignException e) {
+            log.error("Erro ao buscar studentId - userId: {}, Erro: {}", userId, e.getMessage());
+            throw new BusinessException("Erro ao buscar studentId. Tente novamente mais tarde.");
+        } catch (Exception e) {
+            log.error("Erro inesperado ao buscar studentId - userId: {}", userId, e);
+            throw new BusinessException("Erro ao buscar studentId: " + e.getMessage());
+        }
     }
 
     /**
@@ -484,28 +550,6 @@ public class GradeService {
         } catch (Exception e) {
             log.error("Erro inesperado ao validar estudante - ID: {}", studentId, e);
             throw new BusinessException("Erro ao validar estudante: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Valida se o professor existe no microserviço de professores
-     */
-    private void validateTeacherExists(Long teacherId) {
-        try {
-            ApiResponse<?> response = teacherServiceClient.getTeacherById(teacherId);
-            if (response == null || !response.isSuccess()) {
-                throw new BusinessException("Professor não encontrado com ID: " + teacherId);
-            }
-            log.debug("Professor validado com sucesso - ID: {}", teacherId);
-        } catch (FeignException.NotFound e) {
-            log.warn("Professor não encontrado - ID: {}", teacherId);
-            throw new BusinessException("Professor não encontrado com ID: " + teacherId);
-        } catch (FeignException e) {
-            log.error("Erro ao validar professor - ID: {}, Erro: {}", teacherId, e.getMessage());
-            throw new BusinessException("Erro ao validar professor. Tente novamente mais tarde.");
-        } catch (Exception e) {
-            log.error("Erro inesperado ao validar professor - ID: {}", teacherId, e);
-            throw new BusinessException("Erro ao validar professor: " + e.getMessage());
         }
     }
 

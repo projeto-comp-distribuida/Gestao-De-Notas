@@ -96,16 +96,36 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
-        @Value("${spring.web.cors.allowed-origins:*}") String allowedOrigins,
+        @Value("${spring.web.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:8080}") String allowedOrigins,
         @Value("${spring.web.cors.allowed-methods:GET,POST,PUT,DELETE,OPTIONS,PATCH}") String allowedMethods,
         @Value("${spring.web.cors.allowed-headers:*}") String allowedHeaders,
         @Value("${spring.web.cors.allow-credentials:true}") boolean allowCredentials
     ) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(allowedOrigins.split(",")));
+        
+        // Split origins and handle wildcard
+        List<String> originsList = List.of(allowedOrigins.split(","));
+        
+        // If allowCredentials is true, we cannot use "*" in allowedOrigins
+        // Use allowedOriginPatterns for wildcard, or explicit origins
+        if (originsList.size() == 1 && originsList.get(0).equals("*")) {
+            if (allowCredentials) {
+                // Can't use "*" with credentials, so use patterns and disable credentials
+                configuration.setAllowedOriginPatterns(List.of("*"));
+                configuration.setAllowCredentials(false);
+            } else {
+                // Can use "*" without credentials
+                configuration.setAllowedOrigins(originsList);
+                configuration.setAllowCredentials(false);
+            }
+        } else {
+            // Use explicit origins list
+            configuration.setAllowedOrigins(originsList);
+            configuration.setAllowCredentials(allowCredentials);
+        }
+        
         configuration.setAllowedMethods(List.of(allowedMethods.split(",")));
         configuration.setAllowedHeaders(List.of(allowedHeaders.split(",")));
-        configuration.setAllowCredentials(allowCredentials);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -136,7 +156,7 @@ public class SecurityConfig {
         return converter;
     }
 
-    static class AudienceValidator implements OAuth2TokenValidator<Jwt> {
+    public static class AudienceValidator implements OAuth2TokenValidator<Jwt> {
         private final String audience;
 
         AudienceValidator(String audience) {

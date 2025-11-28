@@ -8,3 +8,4 @@ CREATE INDEX IF NOT EXISTS idx_grade_class_id ON grades(class_id);
 COMMENT ON COLUMN grades.class_id IS 'Identificador da turma (class) associada à nota';
 
 
+
